@@ -297,8 +297,6 @@ namespace graphlab {
      * information about the engine.
      */
     typedef icontext<graph_type, gather_type, message_type> icontext_type;
-	
-    std::vector<double> per_thread_compute_time;
 
   private:
 
@@ -317,7 +315,7 @@ namespace graphlab {
      */
     typedef typename graph_type::lvid_type            lvid_type;
 
-    //std::vector<double> per_thread_compute_time;
+    std::vector<double> per_thread_compute_time;
     /**
      * \brief The actual instance of the context type used by this engine.
      */
@@ -888,9 +886,6 @@ namespace graphlab {
      */
     void sync_vertex_program(lvid_type lvid, size_t thread_id);
 
-    //function added to support selective replicas synchronization
-    void sync_vertex_program_special(lvid_type lvid, size_t thread_id, int activated_replicas_count);
-    
     /**
      * \brief Receive all incoming vertex programs and update the
      * local mirrors.
@@ -910,8 +905,6 @@ namespace graphlab {
      */
     void sync_vertex_data(lvid_type lvid, size_t thread_id);
 
-    //the following function does NOT synchronizes any replica vertex data
-    void sync_vertex_data_special(lvid_type lvid, size_t thread_id);
     /**
      * \brief Receive all incoming vertex data and update the local
      * mirrors.
@@ -1707,29 +1700,18 @@ namespace graphlab {
         // Clear the accumulator to save some memory
         gather_accum[lvid] = gather_type();
         // synchronize the changed vertex data with all mirrors
-        sync_vertex_data_special(lvid, thread_id);
-        //sync_vertex_data(lvid, thread_id)
+        sync_vertex_data(lvid, thread_id);
         // determine if a scatter operation is needed
         const vertex_program_type& const_vprog = vertex_programs[lvid];
         const vertex_type const_vertex = vertex;
         if(const_vprog.scatter_edges(context, const_vertex) !=
            graphlab::NO_EDGES) {
-          //the following 'if' is needed to activate Master's scatter 
-          //with the same probability as the Mirrors' scatter
-          //if(graphlab::random::rand01() < const_vprog.sync_prob)
-          local_vertex_type loc_vertex = graph.l_vertex(lvid);
-	  //the following variable will count how many replicas were actually synchronized. notice, master is one of the replicas.
-	  int activated_replicas_count = 0;
-          if(graphlab::random::rand01() < const_vprog.activation_prob){
-             active_minorstep.set_bit(lvid);
-	     activated_replicas_count++;
-          }
-          sync_vertex_program_special(lvid, thread_id, activated_replicas_count);
-	  activated_replicas_count = 0;
-          } else { // we are done so clear the vertex program
-              vertex_programs[lvid] = vertex_program_type();
+          active_minorstep.set_bit(lvid);
+          sync_vertex_program(lvid, thread_id);
+        } else { // we are done so clear the vertex program
+          vertex_programs[lvid] = vertex_program_type();
         }
-        // try to receive vertex data
+      // try to receive vertex data
         if(++vcount % TRY_RECV_MOD == 0) {
           recv_vertex_programs();
           recv_vertex_data();
@@ -1823,41 +1805,6 @@ namespace graphlab {
     }
   } // end of sync_vertex_program
 
-template<typename VertexProgram>
-  void synchronous_engine<VertexProgram>::
-  sync_vertex_program_special(lvid_type lvid, const size_t thread_id, int activated_replicas_count) {
-    ASSERT_TRUE(graph.l_is_master(lvid));
-    const vertex_id_type vid = graph.global_vid(lvid);
-    local_vertex_type vertex = graph.l_vertex(lvid);
-    vertex_program_type& const_vprog = vertex_programs[lvid];
-
-    procid_t my_mirrors_all[vertex.num_mirrors()];
-    procid_t my_mirrors_to_sync[vertex.num_mirrors()];
-    int i = 0;
-    int j = 0;
-    foreach(const procid_t& mirror, vertex.mirrors()) {
-      if(graphlab::random::rand01() < const_vprog.activation_prob){
-        activated_replicas_count++;
-        my_mirrors_to_sync[j++] = mirror;
-      }
-      my_mirrors_all[i++] = mirror;
-    }
-    const_vprog.activation_prob = (float)activated_replicas_count/(vertex.num_mirrors()+1);
-    for(int k=0;k<j;k++)
-      vprog_exchange.send(my_mirrors_to_sync[k], std::make_pair(vid, vertex_programs[lvid]));
-
-    if(activated_replicas_count == 0){
-      activated_replicas_count = 1;
-      int rand_replica = graphlab::random::rand()%(vertex.num_mirrors()+1);
-      if(rand_replica < vertex.num_mirrors()){		
-        vprog_exchange.send(my_mirrors_all[rand_replica], std::make_pair(vid, vertex_programs[lvid]));
-      }
-      else
-        active_minorstep.set_bit(lvid);//activate master		
-    }
-
-    const_vprog.activation_prob = (float)activated_replicas_count/(vertex.num_mirrors()+1);
-  } // end of sync_vertex_program_special
 
 
   template<typename VertexProgram>
@@ -1888,24 +1835,6 @@ template<typename VertexProgram>
       vdata_exchange.send(mirror, std::make_pair(vid, vertex.data()));
     }
   } // end of sync_vertex_data
-
-template<typename VertexProgram>
-  void synchronous_engine<VertexProgram>::
-  sync_vertex_data_special(lvid_type lvid, const size_t thread_id) {
-
-    //This function is currently prevents vertex data synchronization for all the replicas
-
-    //ASSERT_TRUE(graph.l_is_master(lvid));
-    //const vertex_id_type vid = graph.global_vid(lvid);
-    //local_vertex_type vertex = graph.l_vertex(lvid);
-    //const vertex_program_type& const_vprog = vertex_programs[lvid];
-    //foreach(const procid_t& mirror, vertex.mirrors()) {
-      //if(graphlab::random::rand01() < const_vprog.sync_prob) 
-	//vdata_exchange.send(mirror, std::make_pair(vid, vertex.data()));
-    //}
-  } // end of sync_vertex_data_special
-
-
 
 
 
