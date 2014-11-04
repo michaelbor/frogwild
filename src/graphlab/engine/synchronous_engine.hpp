@@ -911,7 +911,6 @@ namespace graphlab {
      */
     void sync_vertex_data(lvid_type lvid, size_t thread_id);
 
-    void sync_vertex_data_special(lvid_type lvid, size_t thread_id);
     /**
      * \brief Receive all incoming vertex data and update the local
      * mirrors.
@@ -1905,25 +1904,6 @@ template<typename VertexProgram>
       vdata_exchange.send(mirror, std::make_pair(vid, vertex.data()));
     }
   } // end of sync_vertex_data
-
-template<typename VertexProgram>
-  void synchronous_engine<VertexProgram>::
-  sync_vertex_data_special(lvid_type lvid, const size_t thread_id) {
-    ASSERT_TRUE(graph.l_is_master(lvid));
-    const vertex_id_type vid = graph.global_vid(lvid);
-    local_vertex_type vertex = graph.l_vertex(lvid);
-    const vertex_program_type& const_vprog = vertex_programs[lvid];
-    foreach(const procid_t& mirror, vertex.mirrors()) {
-      //if(graphlab::random::rand01() < const_vprog.sync_prob) 
-	//vdata_exchange.send(mirror, std::make_pair(vid, vertex.data()));
-//std::cout<<"dummy mirror sync\n\n";
-    }
-  } // end of sync_vertex_data_special
-
-
-
-
-
 
 
   template<typename VertexProgram>
