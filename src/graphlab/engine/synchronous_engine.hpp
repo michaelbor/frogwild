@@ -1738,11 +1738,12 @@ namespace graphlab {
                 int activated_replicas_count = 0;
                 if(graphlab::random::rand01() < act_prob){
                     active_minorstep.set_bit(lvid);
-		            activated_replicas_count++;
+		    activated_replicas_count++;
                 }
                 sync_vertex_program_special(lvid, thread_id, activated_replicas_count);
             }
             else{
+            	active_minorstep.set_bit(lvid);
                 sync_vertex_program(lvid, thread_id);
             }
         } else { // we are done so clear the vertex program
